@@ -21,6 +21,7 @@ from utils import dt_today, dt_tomorrow
 from constants import CURRENT_TZ, DEFAULT_TZ_NAME, EVENTS_DATA_PATH
 from models import Repeats, CalendarEntry
 from files import read_events, write_events
+from notify import notify_impending_events, notify_todays_events
 
 
 def parse_datetime(dt_str):
@@ -29,7 +30,7 @@ def parse_datetime(dt_str):
 
 def timezone_name_from_string(tz_str) -> str:
     """Return a timezone string.
-    if we get a string like "London" 
+    if we get a string like "London"
     return a string "Europe/London"
     """
     for tz in pytz.all_timezones:
@@ -66,16 +67,14 @@ def make_event(summary, dt_str, timezone_string):
     return ce
 
 
-
-
 def upsert_event(event: CalendarEntry, event_data: List[CalendarEntry]):
     """Update or add event."""
     events = list(filter(lambda e: e.uid == event.uid, event_data))
     if events:
         # update existing
         e = events[0]
-        e.summary = event.summary 
-        e.description = event.description       
+        e.summary = event.summary
+        e.description = event.description
         e.updated = datetime.datetime.now(CURRENT_TZ)
         e.duration = event.duration
         e.repeats = event.repeats
@@ -85,16 +84,17 @@ def upsert_event(event: CalendarEntry, event_data: List[CalendarEntry]):
     write_events(event_data)
 
 
-def print_events(events, human=None, numbered=None):
+def print_events(events, human=None, numbered=None, use_local_time=True):
     for i, e in enumerate(events):
         if numbered:
             print(f"{str(i).ljust(3)})", end="")
         if not numbered:
             print(e.uid.split("-")[0].ljust(10), end="")
+        dt = arrow.get(e.dt).to(CURRENT_TZ) if use_local_time else e.dt
         if human:
-            print(arrow.get(e.dt).humanize().ljust(20), end="")
+            print(arrow.get(dt).humanize().ljust(20), end="")
         else:
-            print(str(e.dt).ljust(35), end="")
+            print(str(dt).ljust(35), end="")
         print(e.summary[:20].ljust(22), end="")
         print(e.timezone.ljust(15), end="")
         print(str(e.duration).ljust(10), end="")
@@ -119,6 +119,12 @@ def cli(ctx, user, debug):
 @click.pass_context
 def create(ctx, summary, dt, timezone, interactive):
     """Create a calendar event."""
+    if not summary:
+        summary = "my summary"
+        interactive = True
+    if not dt:
+        dt = dt_tomorrow().isoformat()
+        interactive = True
     timezone = timezone if timezone else DEFAULT_TZ_NAME
     events = ctx.obj.get("events")
     e = make_event(summary, dt, timezone)
@@ -129,8 +135,8 @@ def create(ctx, summary, dt, timezone, interactive):
     e.dump()
 
 
-def edit_event_interactive(event:CalendarEntry):
-    summary = click.prompt(f"Summary", default=event.summary, type=str)
+def edit_event_interactive(event: CalendarEntry):
+    summary = click.prompt("Summary", default=event.summary, type=str)
     year = click.prompt("Year", default=event.dt.now().year, type=int)
     month = click.prompt("Month", default=event.dt.month, type=int)
     day = click.prompt("Day", default=event.dt.day, type=int)
@@ -138,14 +144,20 @@ def edit_event_interactive(event:CalendarEntry):
     minute = click.prompt("Minute", default=event.dt.minute, type=int)
     timezone_str = click.prompt("Timezone", default=event.timezone, type=str)
     # duration = click.prompt("Duration", default=event.duration, type=str)
-    
 
     event.summary = summary
     timezone_str = timezone_name_from_string(timezone_str)
-    tz = pytz.timezone(timezone_str)    
+    tz = pytz.timezone(timezone_str)
     event.dt = tz.localize(datetime.datetime(year, month, day, hour, minute))
-    
+
     return event
+
+
+def filter_events(events, name):
+    """Filter events with name."""
+    if name.lower().strip() == "today":
+        return list(filter(lambda e: e.dt.date() == arrow.get().date, events))
+
 
 @cli.command()
 @click.argument("name", required=False)
@@ -154,9 +166,32 @@ def edit(ctx, name):
     """Edit a calendar event."""
 
     events = ctx.obj.get("events")
-    print_events(events, numbered=True)
-    v = click.prompt("Choose an event", type=int)
-    event = events[v]
+
+    if utils.is_uuid(name):
+        events = list(filter(lambda e: e.uid == name, events))
+        if not events:
+            click.echo("Could not find event")
+            sys.exit(1)
+        event = events[0]
+    elif utils.is_short_uuid(name):
+        events = list(filter(lambda e: utils.get_short_uid(e.uid) == name, events))
+        if not events:
+            click.echo("Could not find event")
+            sys.exit(1)
+        event = events[0]
+    else:
+        if name:
+            events = filter_events(events, name)
+            if not events:
+                click.echo(f"Not events for {name}")
+                sys.exit(1)
+        if len(events) > 1:
+            print_events(events, numbered=True)
+            v = click.prompt("Choose an event", type=int)
+            event = events[v]
+        elif len(events) == 1:
+            event = events[0]
+
     event = edit_event_interactive(event)
     upsert_event(event, events)
     write_events(events)
@@ -212,11 +247,25 @@ def cal(ctx, months):
     dt = datetime.datetime.today()
     calendar.prmonth(dt.year, dt.month)
 
+
 @cli.command()
 @click.pass_context
 @click.argument("dt_str")
 def check(ctx, dt_str):
     print(parse_datetime(dt_str).isoformat())
+
+
+@cli.command()
+@click.pass_context
+def notify_today(ctx):
+    notify_todays_events()
+
+
+@cli.command()
+@click.option("--minutes", "-m", is_flag=True, default=15, required=False)
+@click.pass_context
+def notify_soon(ctx, minutes):
+    notify_impending_events(int(minutes))
 
 
 if __name__ == "__main__":

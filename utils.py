@@ -10,6 +10,7 @@ from constants import CURRENT_TZ, DEFAULT_TZ_NAME, EVENTS_DATA_PATH
 def dt_nowish(minutes):
     return arrow.get(arrow.get().shift(minutes=minutes)).to(CURRENT_TZ)
 
+
 def dt_today():
     return arrow.get(arrow.get().date()).to(CURRENT_TZ)
 

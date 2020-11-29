@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Final
 from pydantic import BaseModel
 
+
 class Repeats(Enum):
     UNIQUE = 0
     HOURLY = 1
@@ -50,5 +51,3 @@ class CalendarEntry(BaseModel):
 
     def __repr__(self):
         return f"{self.user}: {self.dt}, {self.summary}"
-
-
