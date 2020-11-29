@@ -1,0 +1,6 @@
+requests
+Click
+pendulum
+dateparser
+pydantic
+humanize
