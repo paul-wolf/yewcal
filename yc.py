@@ -16,23 +16,22 @@ from pydantic import BaseModel
 import arrow
 
 import utils
+from utils import dt_today, dt_tomorrow
 
 from constants import CURRENT_TZ, DEFAULT_TZ_NAME, EVENTS_DATA_PATH
 from models import Repeats, CalendarEntry
-    
-def dt_today():
-    return arrow.get(arrow.get().date()).to(CURRENT_TZ)
-
-
-def dt_tomorrow():
-    return arrow.get(arrow.get().date()).shift(days=1).to(CURRENT_TZ)
+from files import read_events, write_events
 
 
 def parse_datetime(dt_str):
     return dateparser.parse(dt_str)
 
 
-def timezone_name_from_string(tz_str):
+def timezone_name_from_string(tz_str) -> str:
+    """Return a timezone string.
+    if we get a string like "London" 
+    return a string "Europe/London"
+    """
     for tz in pytz.all_timezones:
         if "/" in tz_str:
             if tz_str.lower() == tz.lower():
@@ -67,22 +66,6 @@ def make_event(summary, dt_str, timezone_string):
     return ce
 
 
-
-def read_events() -> List[CalendarEntry]:
-    if not os.path.exists(EVENTS_DATA_PATH):
-        return list()
-    with open(EVENTS_DATA_PATH) as f:
-        s = f.read()
-        if not s:
-            return list()
-        data = json.loads(s)
-        return [CalendarEntry.parse_obj(d) for d in data]
-
-
-def write_events(event_data: List[CalendarEntry]) -> None:
-    events = [json.loads(e.json()) for e in event_data]
-    with open(EVENTS_DATA_PATH, "wt") as f:
-        f.write(json.dumps(events))
 
 
 def upsert_event(event: CalendarEntry, event_data: List[CalendarEntry]):
