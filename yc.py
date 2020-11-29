@@ -2,7 +2,7 @@ import os
 import sys
 import uuid
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Final
 import pytz
 from enum import Enum
 import datetime
@@ -15,7 +15,8 @@ import dateparser
 from pydantic import BaseModel
 import arrow
 
-DEFAULT_TZ = "Europe/Paris"
+DEFAULT_TZ: Final = "Europe/Paris"
+EVENTS_DATA_PATH: Final = "data/events.json"
 
 class Repeats(Enum):
     UNIQUE = 0
@@ -101,9 +102,9 @@ def make_new_event(summary, dt_str, timezone_string):
     return ce
 
 def read_events():
-    if not os.path.exists("events.json"):
+    if not os.path.exists(EVENTS_DATA_PATH):
         return list()
-    with open("events.json") as f:
+    with open(EVENTS_DATA_PATH) as f:
         s = f.read()
         if not s:
             return list()
@@ -112,7 +113,7 @@ def read_events():
     
 def write_events(event_data):
     events = [json.loads(e.json()) for e in event_data]
-    with open("events.json", "wt") as f:
+    with open(EVENTS_DATA_PATH, "wt") as f:
         f.write(json.dumps(events))
 
 def upsert_event(event, event_data):
