@@ -15,12 +15,9 @@ import dateparser
 from pydantic import BaseModel
 import arrow
 
-CURRENT_TZ = (
-    datetime.datetime.now(datetime.timezone(datetime.timedelta(0))).astimezone().tzinfo
-)
-DEFAULT_TZ_NAME: Final = CURRENT_TZ.tzname(datetime.datetime.now())
-EVENTS_DATA_PATH: Final = "data/events.json"
+import utils
 
+from constants import CURRENT_TZ, DEFAULT_TZ_NAME, EVENTS_DATA_PATH
 
 class Repeats(Enum):
     UNIQUE = 0
@@ -70,6 +67,7 @@ class CalendarEntry(BaseModel):
         return f"{self.user}: {self.dt}, {self.summary}"
 
 
+    
 def dt_today():
     return arrow.get(arrow.get().date()).to(CURRENT_TZ)
 
@@ -93,7 +91,7 @@ def timezone_name_from_string(tz_str):
     raise Exception("Cannot find timezone: {tz_str}")
 
 
-def make_new_event(summary, dt_str, timezone_string):
+def make_event(summary, dt_str, timezone_string):
     """Create new calendar event."""
     timezone_string = timezone_name_from_string(timezone_string)
     tz = pytz.timezone(timezone_string)
@@ -117,7 +115,8 @@ def make_new_event(summary, dt_str, timezone_string):
     return ce
 
 
-def read_events():
+
+def read_events() -> List[CalendarEntry]:
     if not os.path.exists(EVENTS_DATA_PATH):
         return list()
     with open(EVENTS_DATA_PATH) as f:
@@ -128,31 +127,35 @@ def read_events():
         return [CalendarEntry.parse_obj(d) for d in data]
 
 
-def write_events(event_data):
+def write_events(event_data: List[CalendarEntry]) -> None:
     events = [json.loads(e.json()) for e in event_data]
     with open(EVENTS_DATA_PATH, "wt") as f:
         f.write(json.dumps(events))
 
 
-def upsert_event(event, event_data):
+def upsert_event(event: CalendarEntry, event_data: List[CalendarEntry]):
     """Update or add event."""
     events = list(filter(lambda e: e.uid == event.uid, event_data))
     if events:
         # update existing
-        event = events[0]
-        event.summary = e.summary
-        event.updated = pendulum.now(ce.timezone)
-        event.duration = e.duration
-        event.repeats = e.repeats
+        e = events[0]
+        e.summary = event.summary 
+        e.description = event.description       
+        e.updated = datetime.datetime.now(CURRENT_TZ)
+        e.duration = event.duration
+        e.repeats = event.repeats
     else:
         # create new
         event_data.append(event)
     write_events(event_data)
 
 
-def print_events(events, human=None):
-    for e in events:
-        print(e.uid.split("-")[0].ljust(10), end="")
+def print_events(events, human=None, numbered=None):
+    for i, e in enumerate(events):
+        if numbered:
+            print(f"{str(i).ljust(3)})", end="")
+        if not numbered:
+            print(e.uid.split("-")[0].ljust(10), end="")
         if human:
             print(arrow.get(e.dt).humanize().ljust(20), end="")
         else:
@@ -177,17 +180,37 @@ def cli(ctx, user, debug):
 @click.argument("summary", required=False)
 @click.argument("dt", required=False)
 @click.option("--timezone", "-t", required=False)
+@click.option("--interactive", "-i", required=False)
 @click.pass_context
-def create(ctx, summary, dt, timezone):
+def create(ctx, summary, dt, timezone, interactive):
     """Create a calendar event."""
     timezone = timezone if timezone else DEFAULT_TZ_NAME
     events = ctx.obj.get("events")
-    #  import ipdb; ipdb.set_trace()
-    e = make_new_event(summary, dt, timezone)
+    e = make_event(summary, dt, timezone)
+    if interactive:
+        e = edit_event_interactive(e)
     upsert_event(e, events)
     write_events(events)
     e.dump()
 
+
+def edit_event_interactive(event:CalendarEntry):
+    summary = click.prompt(f"Summary", default=event.summary, type=str)
+    year = click.prompt("Year", default=event.dt.now().year, type=int)
+    month = click.prompt("Month", default=event.dt.month, type=int)
+    day = click.prompt("Day", default=event.dt.day, type=int)
+    hour = click.prompt("Hour", default=event.dt.hour, type=int)
+    minute = click.prompt("Minute", default=event.dt.minute, type=int)
+    timezone_str = click.prompt("Timezone", default=event.timezone, type=str)
+    # duration = click.prompt("Duration", default=event.duration, type=str)
+    
+
+    event.summary = summary
+    timezone_str = timezone_name_from_string(timezone_str)
+    tz = pytz.timezone(timezone_str)    
+    event.dt = tz.localize(datetime.datetime(year, month, day, hour, minute))
+    
+    return event
 
 @cli.command()
 @click.argument("name", required=False)
@@ -196,11 +219,13 @@ def edit(ctx, name):
     """Edit a calendar event."""
 
     events = ctx.obj.get("events")
-    #  import ipdb; ipdb.set_trace()
-    e = make_new_event(summary, dt, timezone)
-    upsert_event(e, events)
+    print_events(events, numbered=True)
+    v = click.prompt("Choose an event", type=int)
+    event = events[v]
+    event = edit_event_interactive(event)
+    upsert_event(event, events)
     write_events(events)
-    e.dump()
+    event.dump()
 
 
 @cli.command()
@@ -251,6 +276,12 @@ def tz(ctx, name):
 def cal(ctx, months):
     dt = datetime.datetime.today()
     calendar.prmonth(dt.year, dt.month)
+
+@cli.command()
+@click.pass_context
+@click.argument("dt_str")
+def check(ctx, dt_str):
+    print(parse_datetime(dt_str).isoformat())
 
 
 if __name__ == "__main__":
