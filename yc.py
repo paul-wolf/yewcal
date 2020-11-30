@@ -22,7 +22,7 @@ from constants import CURRENT_TZ, DEFAULT_TZ_NAME, EVENTS_DATA_PATH
 from models import Repeats, CalendarEntry
 from files import read_events, write_events
 from notify import notify_impending_events, notify_todays_events
-
+import sync
 
 def parse_datetime(dt_str):
     return dateparser.parse(dt_str)
@@ -267,6 +267,13 @@ def notify_today(ctx):
 def notify_soon(ctx, minutes):
     notify_impending_events(int(minutes))
 
+@cli.command()
+@click.pass_context
+def push_events(ctx):
+    sync.push_event_data()
+    print("Events pushed")
+
+    
 
 if __name__ == "__main__":
     cli()

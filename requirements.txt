@@ -4,3 +4,4 @@ pendulum
 dateparser
 pydantic
 humanize
+s3fs
