@@ -23,6 +23,7 @@ from models import Repeats, CalendarEntry
 from files import read_events, write_events
 from notify import notify_impending_events, notify_todays_events
 import sync
+from services import google_api
 
 def parse_datetime(dt_str):
     return dateparser.parse(dt_str)
@@ -43,8 +44,16 @@ def timezone_name_from_string(tz_str) -> str:
     raise Exception("Cannot find timezone: {tz_str}")
 
 
-def make_event(summary, dt_str, timezone_string):
+def make_event(summary,
+               dt_str,
+               timezone_string,
+               duration: Optional[datetime.timedelta]=None,
+               external_id=None,
+               source=None,
+               data=None):
     """Create new calendar event."""
+    if not timezone_string:
+        timezone_string = DEFAULT_TZ_NAME
     timezone_string = timezone_name_from_string(timezone_string)
     tz = pytz.timezone(timezone_string)
 
@@ -53,6 +62,8 @@ def make_event(summary, dt_str, timezone_string):
         dt = tz.localize(dt)
     dt = dt.replace(microsecond=0)
 
+    duration if duration else datetime.timedelta(hours=1)
+    
     ce = CalendarEntry(
         uid=str(uuid.uuid4()),
         user=getpass.getuser(),
@@ -61,8 +72,11 @@ def make_event(summary, dt_str, timezone_string):
         timezone=timezone_string,
         created=datetime.datetime.now(tz),
         updated=datetime.datetime.now(tz),
-        duration=pendulum.duration(hours=1).as_timedelta(),
+        duration=duration,
         repeats=Repeats.UNIQUE,
+        external_id=external_id,
+        source=source,
+        data=data,
     )
     return ce
 
@@ -282,7 +296,52 @@ def push_events(ctx):
     sync.push_event_data()
     print("Events pushed")
 
-    
+def existing_external_event(external_id, events):
+    """Return existing external event or None."""
+    events = list(filter(lambda e: e.external_id==external_id, events))
+    if len(events):
+        return events[0]
+    return None
+         
+@cli.command()
+@click.pass_context
+def pull_google_events(ctx):
+    rejected = list()
+    events = ctx.obj.get("events")
+    gevents = google_api.get_google_events(10)
+    for e in gevents:
+        external_id = e.get("id")
+        summary = e.get("summary")
+        dt_start_str = e.get("start")["dateTime"] if "dateTime" in e.get("start") else None
+        dt_end_str = e.get("end")["dateTime"] if "dateTime" in e.get("end") else None
+        if dt_start_str and dt_end_str:
+            dt_start = arrow.get(parse_datetime(dt_start_str))
+            dt_end = arrow.get(parse_datetime(dt_end_str))
+            duration = dt_end - dt_start
+        tz_str = e.get("start")["timeZone"] if "timeZone" in e.get("start") else None
+        data = e.get("conferenceData")
+        existing_event = existing_external_event(e, events)
+        if existing_event or external_id in rejected:
+            print("skipping existing event: {existing_event}")
+            continue
+        print("")
+        print(f"Summary     : {summary}")
+        print(f"Start       : {dt_start_str}")
+        print(f"Timezone    : {tz_str}")
 
+        rejected.append(external_id)
+        v = click.confirm("Take this event?")
+        if v:
+            print(f"TAKING: {summary=}, {dt_start_str=}, {duration=}, {tz_str=}, {external_id=}")
+            new_event = make_event(summary,
+                                   dt_start_str, tz_str,
+                                   duration=duration, external_id=external_id, source="googlecal",
+                                   data=data)
+            upsert_event(new_event, events)
+        else:
+            print("SKIPPING")
+
+        
+        
 if __name__ == "__main__":
     cli()
