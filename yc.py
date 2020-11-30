@@ -207,6 +207,15 @@ def today(ctx, human):
     events = list(filter(lambda e: e.dt >= dt_today() and e.dt < dt_tomorrow(), events))
     print_events(events, human)
 
+@cli.command()
+@click.option("--human", "-h", is_flag=True, required=False)
+@click.pass_context
+def tomorrow(ctx, human):
+    """Create a calendar event."""
+    events = read_events()
+    events = list(filter(lambda e: e.dt >= dt_tomorrow() and e.dt < arrow.get(dt_tomorrow()).shift(days=1), events))
+    print_events(events, human)
+
 
 @cli.command()
 @click.option("--human", "-h", is_flag=True, required=False)
