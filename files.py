@@ -21,5 +21,3 @@ def write_events(event_data: List[CalendarEntry]) -> None:
     events = [json.loads(e.json()) for e in event_data]
     with open(EVENTS_DATA_PATH, "wt") as f:
         f.write(json.dumps(events))
-
-

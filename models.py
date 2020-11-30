@@ -25,10 +25,10 @@ class CalendarEntry(BaseModel):
     duration: datetime.timedelta
     timezone: str
     repeats: Repeats
-    external_id: Optional[str]   # google, ical, etc. id
-    source: Optional[str] # when we pull from another calendar
-    data: Optional[Dict] # arbitrary extra data like conference url
-    
+    external_id: Optional[str]  # google, ical, etc. id
+    source: Optional[str]  # when we pull from another calendar
+    data: Optional[Dict]  # arbitrary extra data like conference url
+
     def dump(self):
         print(f"uid     : {self.uid}")
         print(f"user    : {self.user}")

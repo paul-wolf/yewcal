@@ -9,8 +9,9 @@ from google.auth.transport.requests import Request
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
-TOKEN_FILE ="data/token.pickle"
+TOKEN_FILE = "data/token.pickle"
 CREDENTIALS_FILE = "data/credentials.json"
+
 
 def get_google_events(max_events=10):
     """Shows basic usage of the Google Calendar API.
@@ -51,8 +52,3 @@ def get_google_events(max_events=10):
         .execute()
     )
     return events_result.get("items", [])
-
-
-
-
-

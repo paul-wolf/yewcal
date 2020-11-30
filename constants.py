@@ -3,6 +3,7 @@ import datetime
 import getpass
 
 from environs import Env
+
 env = Env()
 env.read_env(recurse=False)
 

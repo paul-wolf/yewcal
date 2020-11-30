@@ -25,6 +25,7 @@ from notify import notify_impending_events, notify_todays_events
 import sync
 from services import google_api
 
+
 def parse_datetime(dt_str):
     return dateparser.parse(dt_str)
 
@@ -44,13 +45,15 @@ def timezone_name_from_string(tz_str) -> str:
     raise Exception("Cannot find timezone: {tz_str}")
 
 
-def make_event(summary,
-               dt_str,
-               timezone_string,
-               duration: Optional[datetime.timedelta]=None,
-               external_id=None,
-               source=None,
-               data=None):
+def make_event(
+    summary,
+    dt_str,
+    timezone_string,
+    duration: Optional[datetime.timedelta] = None,
+    external_id=None,
+    source=None,
+    data=None,
+):
     """Create new calendar event."""
     if not timezone_string:
         timezone_string = DEFAULT_TZ_NAME
@@ -63,7 +66,7 @@ def make_event(summary,
     dt = dt.replace(microsecond=0)
 
     duration = duration if duration else datetime.timedelta(hours=1)
-    
+
     ce = CalendarEntry(
         uid=str(uuid.uuid4()),
         user=getpass.getuser(),
@@ -221,13 +224,20 @@ def today(ctx, human):
     events = list(filter(lambda e: e.dt >= dt_today() and e.dt < dt_tomorrow(), events))
     print_events(events, human)
 
+
 @cli.command()
 @click.option("--human", "-h", is_flag=True, required=False)
 @click.pass_context
 def tomorrow(ctx, human):
     """Create a calendar event."""
     events = read_events()
-    events = list(filter(lambda e: e.dt >= dt_tomorrow() and e.dt < arrow.get(dt_tomorrow()).shift(days=1), events))
+    events = list(
+        filter(
+            lambda e: e.dt >= dt_tomorrow()
+            and e.dt < arrow.get(dt_tomorrow()).shift(days=1),
+            events,
+        )
+    )
     print_events(events, human)
 
 
@@ -291,11 +301,13 @@ def notify_soon(ctx, minutes):
 
     notify_impending_events(int(minutes))
 
+
 @cli.command()
 @click.pass_context
 def push_events(ctx):
     sync.push_event_data()
     print("Events pushed")
+
 
 @cli.command()
 @click.pass_context
@@ -303,13 +315,15 @@ def pull_events(ctx):
     sync.get_event_data()
     print("Event data pulled")
 
+
 def existing_external_event(external_id, events):
     """Return existing external event or None."""
-    events = list(filter(lambda e: e.external_id==external_id, events))
+    events = list(filter(lambda e: e.external_id == external_id, events))
     if len(events):
         return events[0]
     return None
-         
+
+
 @cli.command()
 @click.pass_context
 def pull_google_events(ctx):
@@ -319,7 +333,9 @@ def pull_google_events(ctx):
     for e in gevents:
         external_id = e.get("id")
         summary = e.get("summary")
-        dt_start_str = e.get("start")["dateTime"] if "dateTime" in e.get("start") else None
+        dt_start_str = (
+            e.get("start")["dateTime"] if "dateTime" in e.get("start") else None
+        )
         dt_end_str = e.get("end")["dateTime"] if "dateTime" in e.get("end") else None
         if dt_start_str and dt_end_str:
             dt_start = arrow.get(parse_datetime(dt_start_str))
@@ -339,16 +355,22 @@ def pull_google_events(ctx):
         rejected.append(external_id)
         v = click.confirm("Take this event?")
         if v:
-            print(f"TAKING: {summary=}, {dt_start_str=}, {duration=}, {tz_str=}, {external_id=}")
-            new_event = make_event(summary,
-                                   dt_start_str, tz_str,
-                                   duration=duration, external_id=external_id, source="googlecal",
-                                   data=data)
+            print(
+                f"TAKING: {summary=}, {dt_start_str=}, {duration=}, {tz_str=}, {external_id=}"
+            )
+            new_event = make_event(
+                summary,
+                dt_start_str,
+                tz_str,
+                duration=duration,
+                external_id=external_id,
+                source="googlecal",
+                data=data,
+            )
             upsert_event(new_event, events)
         else:
             print("SKIPPING")
 
-        
-        
+
 if __name__ == "__main__":
     cli()
