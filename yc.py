@@ -62,7 +62,7 @@ def make_event(summary,
         dt = tz.localize(dt)
     dt = dt.replace(microsecond=0)
 
-    duration if duration else datetime.timedelta(hours=1)
+    duration = duration if duration else datetime.timedelta(hours=1)
     
     ce = CalendarEntry(
         uid=str(uuid.uuid4()),
@@ -295,6 +295,12 @@ def notify_soon(ctx, minutes):
 def push_events(ctx):
     sync.push_event_data()
     print("Events pushed")
+
+@cli.command()
+@click.pass_context
+def pull_events(ctx):
+    sync.get_event_data()
+    print("Event data pulled")
 
 def existing_external_event(external_id, events):
     """Return existing external event or None."""

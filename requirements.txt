@@ -5,3 +5,7 @@ dateparser
 pydantic
 humanize
 s3fs
+arrow
+environs
+google-api-python-client
+google-auth-oauthlib
