@@ -31,16 +31,16 @@ def notify_todays_events():
         print(r.content)
 
 
-def get_impending_events(events, minutes=10):
+def get_impending_events(events, minutes=15):
     """Get events happening within n minutes."""
     start = dt_nowish(0)
-    end = dt_nowish(10)
+    end = dt_nowish(minutes)
     events = list(filter(lambda e: e.dt >= start and e.dt < end, events))
     return events
 
 
-def notify_impending_events():
+def notify_impending_events(minutes=15):
     events = read_events()
-    events = get_impending_events(events, minutes=15)
+    events = get_impending_events(events, minutes)
     for e in events:
         slack.post_message_to_slack("#random", f"{e.summary} at {e.dt}")

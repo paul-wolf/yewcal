@@ -285,9 +285,10 @@ def notify_today(ctx):
 
 
 @cli.command()
-@click.option("--minutes", "-m", is_flag=True, default=15, required=False)
+@click.option("--minutes", "-m", default=15, required=False)
 @click.pass_context
 def notify_soon(ctx, minutes):
+
     notify_impending_events(int(minutes))
 
 @cli.command()
