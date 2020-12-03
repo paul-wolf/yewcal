@@ -133,7 +133,24 @@ Here are three crons for the server:
 
 You would either need to manually push your event data to the AWS bucket or setup a cron on your local machine to regularly update the remote copy of data. 
 
-##  Gooble Calendar
+##  Google Calendar
+
+There is an integration with Google calendar. You need to setup your credentials. Check for where your data directory is:
+
+``` shell
+❯ yc info
+constants.BASE_DATA_PATH='/Users/paul/.yew.d/paul/cal'
+constants.EVENTS_FILENAME='events.json'
+constants.CURRENT_TZ=datetime.timezone(datetime.timedelta(seconds=3600), 'CET')
+constants.DEFAULT_TZ_NAME='CET'
+```
+
+Put these files in the BASE_DATA_PATH:
+
+* credentials.json
+* token.pickle
+
+Instructions for creating these are here <https://developers.google.com/calendar/quickstart/python>.
 
 ## Settings
 
