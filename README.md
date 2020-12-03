@@ -8,15 +8,80 @@ Yewcal is a command line event planner/calendar.
 
 * Show calendar entries
 
-* Notifications of impending events
+* Notifications of impending events, email, sms, Slack
 
-* Day's upcoming envents in email
+* Day's upcoming events in email
 
-* Pull Google Calendar events
+* Selectively pull Google Calendar events
 
 * Syncronise to notification server
 
-You can run a cron job to 
+You can run a cron job to send notifications about imminent
+events. You can push the event data to an AWS bucket to access from
+some server and easily pull it and notify.
+
+## Usage
+
+Create a new event:
+
+``` shell
+yc create "Karl's birthday" "in 3 days"
+```
+
+Show today's events
+``` shell
+❯ yc today
+Thu 2020-12-03      3996d419  12:30   Karl lecture: https:  CET            1:00:00
+                    b1871798  15:09   Peter's birthday      CET            1:00:00
+                    b358a46d  16:00   Weekly Management Ca  Europe/London  1:00:00
+```
+
+Edit an event by providing the id. 
+
+``` shell
+yc edit 3996d419
+```
+
+Show tomorrow's events
+
+``` shell
+yc tomorrow
+```
+
+## Date specification
+
+We use the [dateparser](https://github.com/scrapinghub/dateparser)
+package to parse dates. There is a command "check" that can be used to
+check the result of a natural language date:
+
+``` shell
+❯ yc check "in a week"
+2020-12-10T09:07:51.727824
+❯ yc check "in 4 days"
+2020-12-07T09:08:32.258311
+❯ yc check "in 4 weeks"
+2020-12-31T09:08:38.632423
+❯ yc check tomorrow
+2020-12-04T09:09:13.509811
+❯ yc check today
+2020-12-03T09:09:18.396979
+❯ yc check "in two months"
+2021-02-03T09:12:58.198817
+❯ yc check "12 december"
+2020-12-12T00:00:00
+❯ yc check "12 dec"
+2020-12-12T00:00:00
+```
+
+## Timezones
+
+Yewcal will detect and use the local timezone as the default
+timezone. But you can specify different timezones for each
+event. Timezones can be specified with `-t`:
+
+``` shell
+yc create "Management meeting" thursday -t london
+```
 
 ## cron jobs
 
@@ -29,13 +94,13 @@ Here are three crons for the server:
 
 ``` shell
 # pull data locally 
-*/15 * * * * cd /home/paul/yewcal && /home/someuser/yewcal/.venv/bin/python3.8 yc.py pull-events >>  /home/someuser/yewcal/cron.log 2>&1
+*/15 * * * * cd /home/someuser/yewcal && /home/someuser/yewcal/.venv/bin/python3.8 yc.py pull-events >>  /home/someuser/yewcal/cron.log 2>&1
 
 # send notifications for events that are happening in the next few minutes
-*/5 * * * * cd /home/paul/yewcal && /home/someuser/yewcal/.venv/bin/python3.8 yc.py notify-soon >>  /home/someuser/yewcal/cron.log 2>&1
+*/5 * * * * cd /home/someuser/yewcal && /home/someuser/yewcal/.venv/bin/python3.8 yc.py notify-soon >>  /home/someuser/yewcal/cron.log 2>&1
 
 # send an email at 8am every morning with a digest of events for the day
-0 8 * * * cd /home/paul/yewcal && /home/paul/yewcal/.venv/bin/python3.8 yc.py notify-today >>  /home/someuser/yewcal/cron.log 2>&1
+0 8 * * * cd /home/someuser/yewcal && /home/paul/yewcal/.venv/bin/python3.8 yc.py notify-today >>  /home/someuser/yewcal/cron.log 2>&1
 ```
 
 You would either need to manually push your event data to the AWS bucket or setup a cron on your local machine to regularly update the remote copy of data. 
