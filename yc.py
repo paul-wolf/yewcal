@@ -237,7 +237,7 @@ def edit(ctx, name):
 @click.argument("name", required=False)
 @click.pass_context
 def describe(ctx, name):
-    """Edit a calendar event."""
+    """Show detail about a calendar event."""
 
     events = ctx.obj.get("events")
     event = get_event(events, name)
@@ -355,7 +355,7 @@ def pull_events(ctx):
 @cli.command()
 @click.pass_context
 def info(ctx):
-    """Print info."""
+    """Show information about settings."""
     click.echo(f"{constants.BASE_DATA_PATH=}")
     click.echo(f"{constants.EVENTS_FILENAME=}")
     click.echo(f"{constants.CURRENT_TZ=}")

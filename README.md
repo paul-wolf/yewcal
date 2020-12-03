@@ -48,6 +48,34 @@ Show tomorrow's events
 yc tomorrow
 ```
 
+``` shell
+❯ yc
+Usage: yc.py [OPTIONS] COMMAND [ARGS]...
+
+Options:
+  --user TEXT  User name
+  -d, --debug  Debug flag
+  --help       Show this message and exit.
+
+Commands:
+  all                 List all events, past and future.
+  cal                 Show calendar for months.
+  check               Show how a data string will be interpreted.
+  create              Create a calendar event.
+  describe            Show detail about a calendar event.
+  edit                Edit a calendar event.
+  future              Show all future events.
+  info                Show information about settings.
+  notify-soon         Process notifications for imminent events.
+  notify-today        Show today's events.
+  pull-events         Pull event data from remote storage.
+  pull-google-events  Interactively pull data from user's google calendar.
+  push-events         Push event data to remote storage.
+  today               Show today's events.
+  tomorrow            Show tomorrow's events.
+  tz                  List all timezones.
+```
+
 ## Date specification
 
 We use the [dateparser](https://github.com/scrapinghub/dateparser)
