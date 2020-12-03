@@ -1,4 +1,7 @@
+import os
+
 import s3fs
+import arrow
 
 import constants
 
@@ -10,7 +13,7 @@ def get_s3():
 
 
 def remote_path():
-    return f"{constants.BUCKET}/{constants.USERNAME}/events.json"
+    return f"{constants.BUCKET}/{constants.USERNAME}/{constants.EVENTS_FILENAME}"
 
 
 def push_event_data():
@@ -18,4 +21,15 @@ def push_event_data():
 
 
 def get_event_data():
-    get_s3().get_file(remote_path(), constants.EVENTS_DATA_PATH)
+
+    data = get_s3().info(remote_path())
+    remote_dt = data.get("LastModified")
+    print(f"Remote file time : {arrow.get(remote_dt)}")
+    print(
+        f"Local file time  : {arrow.get(os.path.getmtime(constants.EVENTS_DATA_PATH))}"
+    )
+    if arrow.get(remote_dt) < arrow.get(os.path.getmtime(constants.EVENTS_DATA_PATH)):
+        print("Remote is older than local, aborting")
+        raise SystemExit
+    else:
+        get_s3().get_file(remote_path(), constants.EVENTS_DATA_PATH)

@@ -1,4 +1,5 @@
 import datetime
+import json
 from enum import Enum
 
 from typing import Dict, List, Optional, Final
@@ -37,8 +38,11 @@ class CalendarEntry(BaseModel):
         print(f"summary : {self.summary}")
         print(f"duration: {self.duration}")
         print(f"repeats : {self.repeats}")
-        if self.external_id:
+        if self.source or self.external_id:
+            print(f"source  : {self.source}")
             print(f"ext id  : {self.external_id}")
+        if self.data:
+            print(json.dumps(self.data, indent=4, default=str))
 
     def __str__(self):
         return f"{self.user}: {self.dt}, {self.summary}"

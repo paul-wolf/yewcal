@@ -1,6 +1,5 @@
 requests
 Click
-pendulum
 dateparser
 pydantic
 humanize
@@ -9,3 +8,4 @@ arrow
 environs
 google-api-python-client
 google-auth-oauthlib
+twilio

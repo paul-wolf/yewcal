@@ -9,7 +9,6 @@ import datetime
 import getpass
 import calendar
 
-import pendulum
 import click
 import dateparser
 from pydantic import BaseModel
@@ -19,6 +18,7 @@ import utils
 from utils import dt_today, dt_tomorrow
 
 from constants import CURRENT_TZ, DEFAULT_TZ_NAME, EVENTS_DATA_PATH
+import constants
 from models import Repeats, CalendarEntry
 from files import read_events, write_events
 from notify import notify_impending_events, notify_todays_events
@@ -53,8 +53,8 @@ def make_event(
     external_id=None,
     source=None,
     data=None,
-):
-    """Create new calendar event."""
+) -> CalendarEntry:
+    """Create and return new calendar event."""
     if not timezone_string:
         timezone_string = DEFAULT_TZ_NAME
     timezone_string = timezone_name_from_string(timezone_string)
@@ -102,20 +102,32 @@ def upsert_event(event: CalendarEntry, event_data: List[CalendarEntry]):
 
 
 def print_events(events, human=None, numbered=None, use_local_time=True):
+    current_date = None
     for i, e in enumerate(events):
+        if not current_date == e.dt.date():
+            day_string = arrow.get(arrow.get(e.dt).date()).format("ddd YYYY-MM-DD")
+            current_date = e.dt.date()
+            click.echo(day_string.ljust(20), nl=False)
+        else:
+            print("".ljust(20), end="")
+
         if numbered:
             print(f"{str(i).ljust(3)})", end="")
         if not numbered:
             print(e.uid.split("-")[0].ljust(10), end="")
-        dt = arrow.get(e.dt).to(CURRENT_TZ) if use_local_time else e.dt
+
         if human:
-            print(arrow.get(dt).humanize().ljust(20), end="")
+            click.echo(
+                click.style(arrow.get(e.dt).humanize().ljust(16), fg="blue"), nl=False
+            )
         else:
-            print(str(dt).ljust(35), end="")
-        print(e.summary[:20].ljust(22), end="")
+            dtf = arrow.get(e.dt).format("HH:mm")
+            print(dtf.ljust(8), end="")
+        click.echo(click.style(e.summary[:20].ljust(22), fg="green"), nl=False)
         print(e.timezone.ljust(15), end="")
         print(str(e.duration).ljust(10), end="")
-        print(str(e.repeats).ljust(10), end="")
+        if not e.repeats == Repeats.UNIQUE:
+            print(str(e.repeats).ljust(10), end="")
         print()
 
 
@@ -125,7 +137,8 @@ def print_events(events, human=None, numbered=None, use_local_time=True):
 @click.pass_context
 def cli(ctx, user, debug):
     ctx.ensure_object(dict)
-    ctx.obj["events"] = read_events()
+    events = read_events()
+    ctx.obj["events"] = sorted(events, key=lambda c: c.dt)
 
 
 @cli.command()
@@ -176,14 +189,8 @@ def filter_events(events, name):
         return list(filter(lambda e: e.dt.date() == arrow.get().date, events))
 
 
-@cli.command()
-@click.argument("name", required=False)
-@click.pass_context
-def edit(ctx, name):
-    """Edit a calendar event."""
-
-    events = ctx.obj.get("events")
-
+def get_event(events, name):
+    event = None
     if utils.is_uuid(name):
         events = list(filter(lambda e: e.uid == name, events))
         if not events:
@@ -208,7 +215,18 @@ def edit(ctx, name):
             event = events[v]
         elif len(events) == 1:
             event = events[0]
+    return event
 
+
+@cli.command()
+@click.argument("name", required=False)
+@click.pass_context
+def edit(ctx, name):
+    """Edit a calendar event."""
+
+    events = ctx.obj.get("events")
+
+    event = get_event(events, name)
     event = edit_event_interactive(event)
     upsert_event(event, events)
     write_events(events)
@@ -216,11 +234,22 @@ def edit(ctx, name):
 
 
 @cli.command()
+@click.argument("name", required=False)
+@click.pass_context
+def describe(ctx, name):
+    """Edit a calendar event."""
+
+    events = ctx.obj.get("events")
+    event = get_event(events, name)
+    event.dump()
+
+
+@cli.command()
 @click.option("--human", "-h", is_flag=True, required=False)
 @click.pass_context
 def today(ctx, human):
-    """Create a calendar event."""
-    events = read_events()
+    """Show today's events."""
+    events = ctx.obj.get("events")
     events = list(filter(lambda e: e.dt >= dt_today() and e.dt < dt_tomorrow(), events))
     print_events(events, human)
 
@@ -229,8 +258,9 @@ def today(ctx, human):
 @click.option("--human", "-h", is_flag=True, required=False)
 @click.pass_context
 def tomorrow(ctx, human):
-    """Create a calendar event."""
-    events = read_events()
+    """Show tomorrow's events."""
+    events = ctx.obj.get("events")
+
     events = list(
         filter(
             lambda e: e.dt >= dt_tomorrow()
@@ -245,8 +275,9 @@ def tomorrow(ctx, human):
 @click.option("--human", "-h", is_flag=True, required=False)
 @click.pass_context
 def future(ctx, human):
-    """Create a calendar event."""
-    events = read_events()
+    """Show all future events."""
+
+    events = ctx.obj.get("events")
     events = list(filter(lambda e: e.dt >= dt_today(), events))
     print_events(events, human)
 
@@ -255,8 +286,8 @@ def future(ctx, human):
 @click.option("--human", "-h", is_flag=True, required=False)
 @click.pass_context
 def all(ctx, human):
-    """List all."""
-    events = read_events()
+    """List all events, past and future."""
+    events = ctx.obj.get("events")
     print_events(events, human)
 
 
@@ -277,6 +308,7 @@ def tz(ctx, name):
 @click.pass_context
 @click.argument("months", required=False)
 def cal(ctx, months):
+    """Show calendar for months."""
     dt = datetime.datetime.today()
     calendar.prmonth(dt.year, dt.month)
 
@@ -285,12 +317,14 @@ def cal(ctx, months):
 @click.pass_context
 @click.argument("dt_str")
 def check(ctx, dt_str):
+    """Show how a data string will be interpreted."""
     print(parse_datetime(dt_str).isoformat())
 
 
 @cli.command()
 @click.pass_context
 def notify_today(ctx):
+    """Show today's events."""
     notify_todays_events()
 
 
@@ -298,13 +332,14 @@ def notify_today(ctx):
 @click.option("--minutes", "-m", default=15, required=False)
 @click.pass_context
 def notify_soon(ctx, minutes):
-
+    """Process notifications for imminent events."""
     notify_impending_events(int(minutes))
 
 
 @cli.command()
 @click.pass_context
 def push_events(ctx):
+    """Push event data to remote storage."""
     sync.push_event_data()
     print("Events pushed")
 
@@ -312,8 +347,19 @@ def push_events(ctx):
 @cli.command()
 @click.pass_context
 def pull_events(ctx):
+    """Pull event data from remote storage. Overwrites local data."""
     sync.get_event_data()
     print("Event data pulled")
+
+
+@cli.command()
+@click.pass_context
+def info(ctx):
+    """Print info."""
+    click.echo(f"{constants.BASE_DATA_PATH=}")
+    click.echo(f"{constants.EVENTS_FILENAME=}")
+    click.echo(f"{constants.CURRENT_TZ=}")
+    click.echo(f"{constants.DEFAULT_TZ_NAME=}")
 
 
 def existing_external_event(external_id, events):
@@ -327,6 +373,9 @@ def existing_external_event(external_id, events):
 @cli.command()
 @click.pass_context
 def pull_google_events(ctx):
+    """Interactively pull data from user's google calendar.
+    Requires credentials to be setup.
+    """
     rejected = list()
     events = ctx.obj.get("events")
     gevents = google_api.get_google_events(10)

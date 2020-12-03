@@ -2,15 +2,18 @@ import datetime
 import pickle
 import os.path
 import json
+
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
+import constants
+
 # If modifying these scopes, delete the file token.pickle.
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
-TOKEN_FILE = "data/token.pickle"
-CREDENTIALS_FILE = "data/credentials.json"
+TOKEN_FILE = os.path.join(constants.BASE_DATA_PATH, "token.pickle")
+CREDENTIALS_FILE = os.path.join(constants.BASE_DATA_PATH, "credentials.json")
 
 
 def get_google_events(max_events=10):
