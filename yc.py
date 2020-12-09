@@ -103,28 +103,37 @@ def upsert_event(event: CalendarEntry, event_data: List[CalendarEntry]):
 
 def print_events(events, human=None, numbered=None, use_local_time=True):
     current_date = None
+    print(f"Current time: {arrow.get()}, {constants.CURRENT_TZ}")
     for i, e in enumerate(events):
+        tz = pytz.timezone(e.timezone)
         if not current_date == e.dt.date():
             day_string = arrow.get(arrow.get(e.dt).date()).format("ddd YYYY-MM-DD")
             current_date = e.dt.date()
-            click.echo(day_string.ljust(20), nl=False)
+            click.echo(day_string.ljust(16), nl=False)
         else:
-            print("".ljust(20), end="")
+            print("".ljust(16), end="")
 
         if numbered:
             print(f"{str(i).ljust(3)})", end="")
         if not numbered:
             print(e.uid.split("-")[0].ljust(10), end="")
 
+        
+        # print time
+        dt = arrow.get(e.dt.astimezone(constants.CURRENT_TZ)) if use_local_time else arrow.get(e.dt)
         if human:
             click.echo(
-                click.style(arrow.get(e.dt).humanize().ljust(16), fg="blue"), nl=False
+                click.style(arrow.get(dt).humanize().ljust(16), fg="blue"), nl=False
             )
         else:
-            dtf = arrow.get(e.dt).format("HH:mm")
+            dtf = dt.format("HH:mm")
             print(dtf.ljust(8), end="")
+
+            
         click.echo(click.style(e.summary[:20].ljust(22), fg="green"), nl=False)
-        print(e.timezone.ljust(15), end="")
+
+        tz_string = f"[{arrow.get(e.dt).format('HH:mm')} {e.timezone}]"
+        print(tz_string.ljust(22), end="")
         print(str(e.duration).ljust(10), end="")
         if not e.repeats == Repeats.UNIQUE:
             print(str(e.repeats).ljust(10), end="")
@@ -165,7 +174,11 @@ def create(ctx, summary, dt, timezone, interactive):
     e.dump()
 
 
-def edit_event_interactive(event: CalendarEntry):
+def edit_event_interactive(event: CalendarEntry) -> CalendarEntry:
+    """Interactively query the user for the event data. 
+
+    This returns an event object but does not save it.
+    """
     summary = click.prompt("Summary", default=event.summary, type=str)
     year = click.prompt("Year", default=event.dt.now().year, type=int)
     month = click.prompt("Month", default=event.dt.month, type=int)
@@ -175,11 +188,14 @@ def edit_event_interactive(event: CalendarEntry):
     timezone_str = click.prompt("Timezone", default=event.timezone, type=str)
     # duration = click.prompt("Duration", default=event.duration, type=str)
 
+    # import ipdb;ipdb.set_trace()
+    
     event.summary = summary
     timezone_str = timezone_name_from_string(timezone_str)
     tz = pytz.timezone(timezone_str)
-    event.dt = tz.localize(datetime.datetime(year, month, day, hour, minute))
-
+    event.dt = tz.localize(datetime.datetime(int(year), int(month), int(day), int(hour), int(minute)))
+    event.timezone = timezone_str
+    
     return event
 
 
@@ -246,18 +262,20 @@ def describe(ctx, name):
 
 @cli.command()
 @click.option("--human", "-h", is_flag=True, required=False)
+@click.option("--local", "-l", is_flag=True, default=True, required=False)
 @click.pass_context
-def today(ctx, human):
+def today(ctx, human, local):
     """Show today's events."""
     events = ctx.obj.get("events")
     events = list(filter(lambda e: e.dt >= dt_today() and e.dt < dt_tomorrow(), events))
-    print_events(events, human)
+    print_events(events, human, use_local_time=local)
 
 
 @cli.command()
 @click.option("--human", "-h", is_flag=True, required=False)
+@click.option("--local", "-l", is_flag=True, default=True, required=False)
 @click.pass_context
-def tomorrow(ctx, human):
+def tomorrow(ctx, human, local):
     """Show tomorrow's events."""
     events = ctx.obj.get("events")
 
@@ -268,27 +286,29 @@ def tomorrow(ctx, human):
             events,
         )
     )
-    print_events(events, human)
+    print_events(events, human, use_local_time=local)
 
 
 @cli.command()
 @click.option("--human", "-h", is_flag=True, required=False)
+@click.option("--local", "-l", is_flag=True, default=True, required=False)
 @click.pass_context
-def future(ctx, human):
+def future(ctx, human, local):
     """Show all future events."""
 
     events = ctx.obj.get("events")
     events = list(filter(lambda e: e.dt >= dt_today(), events))
-    print_events(events, human)
+    print_events(events, human, use_local_time=local)
 
 
 @cli.command()
 @click.option("--human", "-h", is_flag=True, required=False)
+@click.option("--local", "-l", is_flag=True, default=True, required=False)
 @click.pass_context
 def all(ctx, human):
     """List all events, past and future."""
     events = ctx.obj.get("events")
-    print_events(events, human)
+    print_events(events, human, use_local_time=local)
 
 
 @cli.command()
