@@ -1,0 +1,9 @@
+{
+  "binary": "/Users/paul/prj/yc/.venv/bin/pyre.bin",
+  "source_directories": [
+    "."
+  ],
+  "exclude": [".*/.venv/.*"],
+  "taint_models_path": "/usr/local/lib",
+  "typeshed": "/usr/local/lib/pyre_check/typeshed"
+}
