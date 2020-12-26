@@ -1,9 +1,9 @@
 import os
 import json
-from typing import List, Dict, Optional
+from typing import List
 
-from constants import CURRENT_TZ, DEFAULT_TZ_NAME, EVENTS_DATA_PATH, BASE_DATA_PATH
-from models import Repeats, CalendarEntry
+from constants import EVENTS_DATA_PATH, BASE_DATA_PATH
+from models import CalendarEntry
 
 
 def read_events() -> List[CalendarEntry]:

@@ -1,14 +1,7 @@
-import os
-import sys
-
-import arrow
-
-import utils
 from utils import dt_today, dt_tomorrow, dt_nowish
 
-from constants import CURRENT_TZ, DEFAULT_TZ_NAME, EVENTS_DATA_PATH, MY_EMAIL_ADDRESS
-from models import Repeats, CalendarEntry
-from files import read_events, write_events
+from constants import MY_EMAIL_ADDRESS
+from files import read_events
 from services import slack, mailgun
 
 

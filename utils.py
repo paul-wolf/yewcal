@@ -1,10 +1,8 @@
-import os
-import sys
 import re
 
 import arrow
 
-from constants import CURRENT_TZ, DEFAULT_TZ_NAME, EVENTS_DATA_PATH
+from constants import CURRENT_TZ
 
 
 def dt_nowish(minutes):

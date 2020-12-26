@@ -1,23 +1,21 @@
-import os
 import sys
+
 import uuid
-import json
-from typing import Dict, List, Optional, Final
+
+from typing import List, Optional
 import pytz
-from enum import Enum
 import datetime
 import getpass
 import calendar
 
 import click
 import dateparser
-from pydantic import BaseModel
 import arrow
 
 import utils
 from utils import dt_today, dt_tomorrow
 
-from constants import CURRENT_TZ, DEFAULT_TZ_NAME, EVENTS_DATA_PATH
+from constants import CURRENT_TZ, DEFAULT_TZ_NAME
 import constants
 from models import Repeats, CalendarEntry
 from files import read_events, write_events
@@ -86,7 +84,7 @@ def make_event(
 
 def upsert_event(event: CalendarEntry, event_data: List[CalendarEntry]):
     """Update or add event."""
-    events = list(filter(lambda e: e.uid == event.uid, event_data))
+    events = tuple(e for e in event_data if e.uid == event.uid)
     if events:
         # update existing
         e = events[0]
@@ -105,7 +103,7 @@ def print_events(events, human=None, numbered=None, use_local_time=True):
     current_date = None
     print(f"Current time: {arrow.get()}, {constants.CURRENT_TZ}")
     for i, e in enumerate(events):
-        tz = pytz.timezone(e.timezone)
+        # tz = pytz.timezone(e.timezone)
         if not current_date == e.dt.date():
             day_string = arrow.get(arrow.get(e.dt).date()).format("ddd YYYY-MM-DD")
             current_date = e.dt.date()
@@ -118,9 +116,12 @@ def print_events(events, human=None, numbered=None, use_local_time=True):
         if not numbered:
             print(e.uid.split("-")[0].ljust(10), end="")
 
-        
         # print time
-        dt = arrow.get(e.dt.astimezone(constants.CURRENT_TZ)) if use_local_time else arrow.get(e.dt)
+        dt = (
+            arrow.get(e.dt.astimezone(constants.CURRENT_TZ))
+            if use_local_time
+            else arrow.get(e.dt)
+        )
         if human:
             click.echo(
                 click.style(arrow.get(dt).humanize().ljust(16), fg="blue"), nl=False
@@ -129,7 +130,6 @@ def print_events(events, human=None, numbered=None, use_local_time=True):
             dtf = dt.format("HH:mm")
             print(dtf.ljust(8), end="")
 
-            
         click.echo(click.style(e.summary[:20].ljust(22), fg="green"), nl=False)
 
         tz_string = f"[{arrow.get(e.dt).format('HH:mm')} {e.timezone}]"
@@ -175,7 +175,7 @@ def create(ctx, summary, dt, timezone, interactive):
 
 
 def edit_event_interactive(event: CalendarEntry) -> CalendarEntry:
-    """Interactively query the user for the event data. 
+    """Interactively query the user for the event data.
 
     This returns an event object but does not save it.
     """
@@ -189,32 +189,34 @@ def edit_event_interactive(event: CalendarEntry) -> CalendarEntry:
     # duration = click.prompt("Duration", default=event.duration, type=str)
 
     # import ipdb;ipdb.set_trace()
-    
+
     event.summary = summary
     timezone_str = timezone_name_from_string(timezone_str)
     tz = pytz.timezone(timezone_str)
-    event.dt = tz.localize(datetime.datetime(int(year), int(month), int(day), int(hour), int(minute)))
+    event.dt = tz.localize(
+        datetime.datetime(int(year), int(month), int(day), int(hour), int(minute))
+    )
     event.timezone = timezone_str
-    
+
     return event
 
 
 def filter_events(events, name):
     """Filter events with name."""
     if name.lower().strip() == "today":
-        return list(filter(lambda e: e.dt.date() == arrow.get().date, events))
+        return tuple(e for e in events if e.dt.date() == arrow.get().date)
 
 
-def get_event(events, name):
+def get_event(events, name: str) -> CalendarEntry:
     event = None
     if utils.is_uuid(name):
-        events = list(filter(lambda e: e.uid == name, events))
+        events = tuple(e for e in events if e.uid == name)
         if not events:
             click.echo("Could not find event")
             sys.exit(1)
         event = events[0]
     elif utils.is_short_uuid(name):
-        events = list(filter(lambda e: utils.get_short_uid(e.uid) == name, events))
+        events = tuple(e for e in events if utils.get_short_uid(e.uid) == name)
         if not events:
             click.echo("Could not find event")
             sys.exit(1)
@@ -223,7 +225,7 @@ def get_event(events, name):
         if name:
             events = filter_events(events, name)
             if not events:
-                click.echo(f"Not events for {name}")
+                click.echo(f"No events for {name}")
                 sys.exit(1)
         if len(events) > 1:
             print_events(events, numbered=True)
@@ -267,7 +269,7 @@ def describe(ctx, name):
 def today(ctx, human, local):
     """Show today's events."""
     events = ctx.obj.get("events")
-    events = list(filter(lambda e: e.dt >= dt_today() and e.dt < dt_tomorrow(), events))
+    events = tuple(e for e in events if e.dt >= dt_today() and e.dt < dt_tomorrow())
     print_events(events, human, use_local_time=local)
 
 
@@ -279,12 +281,10 @@ def tomorrow(ctx, human, local):
     """Show tomorrow's events."""
     events = ctx.obj.get("events")
 
-    events = list(
-        filter(
-            lambda e: e.dt >= dt_tomorrow()
-            and e.dt < arrow.get(dt_tomorrow()).shift(days=1),
-            events,
-        )
+    events = (
+        e
+        for e in events
+        if e.dt >= dt_tomorrow() and e.dt < arrow.get(dt_tomorrow()).shift(days=1)
     )
     print_events(events, human, use_local_time=local)
 
@@ -297,7 +297,7 @@ def future(ctx, human, local):
     """Show all future events."""
 
     events = ctx.obj.get("events")
-    events = list(filter(lambda e: e.dt >= dt_today(), events))
+    events = tuple(e for e in events if e.dt >= dt_today())
     print_events(events, human, use_local_time=local)
 
 
@@ -305,7 +305,7 @@ def future(ctx, human, local):
 @click.option("--human", "-h", is_flag=True, required=False)
 @click.option("--local", "-l", is_flag=True, default=True, required=False)
 @click.pass_context
-def all(ctx, human):
+def all(ctx, human, local):
     """List all events, past and future."""
     events = ctx.obj.get("events")
     print_events(events, human, use_local_time=local)
@@ -382,9 +382,9 @@ def info(ctx):
     click.echo(f"{constants.DEFAULT_TZ_NAME=}")
 
 
-def existing_external_event(external_id, events):
+def existing_external_event(external_id, events) -> Optional[CalendarEntry]:
     """Return existing external event or None."""
-    events = list(filter(lambda e: e.external_id == external_id, events))
+    events = tuple(e for e in events if e.external_id == external_id)
     if len(events):
         return events[0]
     return None

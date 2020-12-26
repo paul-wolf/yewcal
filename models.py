@@ -2,7 +2,7 @@ import datetime
 import json
 from enum import Enum
 
-from typing import Dict, List, Optional, Final
+from typing import Dict, Optional
 from pydantic import BaseModel
 
 
