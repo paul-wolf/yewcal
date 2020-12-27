@@ -269,7 +269,7 @@ def edit(ctx, name):
 
     event = get_event(events, name)
     event = edit_event_interactive(event)
-    upsert_event(ctx.obj["event_data_path"], event, events)
+    upsert_event(ctx.obj["events_data_path"], event, events)
     event.dump()
 
 
