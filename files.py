@@ -1,15 +1,15 @@
 import os
 import json
-from typing import List
+from typing import List, Sequence
 
-from constants import EVENTS_DATA_PATH, BASE_DATA_PATH
+
 from models import CalendarEntry
 
 
-def read_events() -> List[CalendarEntry]:
-    if not os.path.exists(EVENTS_DATA_PATH):
+def read_events(events_data_path) -> List[CalendarEntry]:
+    if not os.path.exists(events_data_path):
         return list()
-    with open(EVENTS_DATA_PATH) as f:
+    with open(events_data_path) as f:
         s = f.read()
         if not s:
             return list()
@@ -17,9 +17,10 @@ def read_events() -> List[CalendarEntry]:
         return [CalendarEntry.parse_obj(d) for d in data]
 
 
-def write_events(event_data: List[CalendarEntry]) -> None:
-    if not os.path.exists(BASE_DATA_PATH):
-        os.makedirs(BASE_DATA_PATH)
+def write_events(events_data_path, event_data: Sequence[CalendarEntry]) -> None:
+    base_data_path = os.path.split(events_data_path)[0]
+    if not os.path.exists(base_data_path):
+        os.makedirs(base_data_path)
     events = [json.loads(e.json()) for e in event_data]
-    with open(EVENTS_DATA_PATH, "wt") as f:
+    with open(events_data_path, "wt") as f:
         f.write(json.dumps(events))

@@ -3,14 +3,11 @@ import urllib
 import requests
 
 
-from constants import MG_API_KEY, MG_API_URL, MG_FROM
-
-
-def send_email(to_addresses, subject, body, from_address=None):
-    from_address = from_address if from_address else MG_FROM
+def send_email(context, to_addresses, subject, body, from_address=None):
+    from_address = from_address or context["MG_FROM"]
     return requests.post(
-        urllib.parse.urljoin(MG_API_URL, "messages"),
-        auth=("api", MG_API_KEY),
+        urllib.parse.urljoin(context["MG_API_URL"], "messages"),
+        auth=("api", context["MG_API_KEY"]),
         data={
             "from": from_address,
             "to": [to_addresses],

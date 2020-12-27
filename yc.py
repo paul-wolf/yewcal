@@ -1,8 +1,9 @@
+import os
 import sys
-
+import json
 import uuid
 
-from typing import List, Optional
+from typing import List, Optional, Tuple, Union
 import pytz
 import datetime
 import getpass
@@ -43,27 +44,32 @@ def timezone_name_from_string(tz_str) -> str:
     raise Exception("Cannot find timezone: {tz_str}")
 
 
+class DatetimeInvalid(Exception):
+    pass
+
+
 def make_event(
     summary,
     dt_str,
-    timezone_string,
+    timezone_string=None,
     duration: Optional[datetime.timedelta] = None,
     external_id=None,
     source=None,
     data=None,
 ) -> CalendarEntry:
     """Create and return new calendar event."""
-    if not timezone_string:
-        timezone_string = DEFAULT_TZ_NAME
+
+    timezone_string = timezone_string or DEFAULT_TZ_NAME
     timezone_string = timezone_name_from_string(timezone_string)
     tz = pytz.timezone(timezone_string)
 
     dt = parse_datetime(dt_str)
-    if not dt.tzinfo:
-        dt = tz.localize(dt)
+    if not dt:
+        raise DatetimeInvalid(f"Could not turn into datetime: {dt_str}")
+    dt = dt.tzinfo or tz.localize(dt)
     dt = dt.replace(microsecond=0)
 
-    duration = duration if duration else datetime.timedelta(hours=1)
+    duration = duration or datetime.timedelta(hours=1)
 
     ce = CalendarEntry(
         uid=str(uuid.uuid4()),
@@ -82,8 +88,14 @@ def make_event(
     return ce
 
 
-def upsert_event(event: CalendarEntry, event_data: List[CalendarEntry]):
-    """Update or add event."""
+def upsert_event(
+    events_data_path, event: CalendarEntry, event_data: List[CalendarEntry]
+) -> None:
+    """Update or add event.
+
+    This writes the event file.
+
+    """
     events = tuple(e for e in event_data if e.uid == event.uid)
     if events:
         # update existing
@@ -96,7 +108,8 @@ def upsert_event(event: CalendarEntry, event_data: List[CalendarEntry]):
     else:
         # create new
         event_data.append(event)
-    write_events(event_data)
+
+    write_events(events_data_path, events)
 
 
 def print_events(events, human=None, numbered=None, use_local_time=True):
@@ -141,13 +154,24 @@ def print_events(events, human=None, numbered=None, use_local_time=True):
 
 
 @click.group()
-@click.option("--user", help="User name", required=False)
+@click.option("--user", help="User name", default=None, required=False)
 @click.option("--debug", "-d", is_flag=True, help="Debug flag", required=False)
 @click.pass_context
 def cli(ctx, user, debug):
+    username = user or getpass.getuser()
+    base_data_path = os.path.join(os.path.expanduser("~"), ".yew.d", username, "cal")
+    events_data_path = os.path.join(base_data_path, constants.EVENTS_FILENAME)
+    settings_path = os.path.join(base_data_path, constants.SETTINGS_FILENAME)
     ctx.ensure_object(dict)
-    events = read_events()
+    events = read_events(events_data_path)
     ctx.obj["events"] = sorted(events, key=lambda c: c.dt)
+    ctx.obj["username"] = user
+    with open(settings_path) as f:
+        settings = json.load(f)
+    ctx.obj.update(settings)
+    ctx.obj["events_data_path"] = events_data_path
+    ctx.obj["base_data_path"] = base_data_path
+    ctx.obj["debug"] = debug
 
 
 @cli.command()
@@ -164,13 +188,12 @@ def create(ctx, summary, dt, timezone, interactive):
     if not dt:
         dt = dt_tomorrow().isoformat()
         interactive = True
-    timezone = timezone if timezone else DEFAULT_TZ_NAME
+    timezone = timezone or DEFAULT_TZ_NAME
     events = ctx.obj.get("events")
     e = make_event(summary, dt, timezone)
     if interactive:
         e = edit_event_interactive(e)
-    upsert_event(e, events)
-    write_events(events)
+    upsert_event(ctx.obj["events_data_path"], e, events)
     e.dump()
 
 
@@ -180,11 +203,11 @@ def edit_event_interactive(event: CalendarEntry) -> CalendarEntry:
     This returns an event object but does not save it.
     """
     summary = click.prompt("Summary", default=event.summary, type=str)
-    year = click.prompt("Year", default=event.dt.now().year, type=int)
-    month = click.prompt("Month", default=event.dt.month, type=int)
-    day = click.prompt("Day", default=event.dt.day, type=int)
-    hour = click.prompt("Hour", default=event.dt.hour, type=int)
-    minute = click.prompt("Minute", default=event.dt.minute, type=int)
+    year = click.prompt("Year", default=str(event.dt.now().year), type=int)
+    month = click.prompt("Month", default=str(event.dt.month), type=int)
+    day = click.prompt("Day", default=str(event.dt.day), type=int)
+    hour = click.prompt("Hour", default=str(event.dt.hour), type=int)
+    minute = click.prompt("Minute", default=str(event.dt.minute), type=int)
     timezone_str = click.prompt("Timezone", default=event.timezone, type=str)
     # duration = click.prompt("Duration", default=event.duration, type=str)
 
@@ -207,7 +230,7 @@ def filter_events(events, name):
         return tuple(e for e in events if e.dt.date() == arrow.get().date)
 
 
-def get_event(events, name: str) -> CalendarEntry:
+def get_event(events, name: str) -> Optional[CalendarEntry]:
     event = None
     if utils.is_uuid(name):
         events = tuple(e for e in events if e.uid == name)
@@ -246,8 +269,7 @@ def edit(ctx, name):
 
     event = get_event(events, name)
     event = edit_event_interactive(event)
-    upsert_event(event, events)
-    write_events(events)
+    upsert_event(ctx.obj["event_data_path"], event, events)
     event.dump()
 
 
@@ -345,7 +367,7 @@ def check(ctx, dt_str):
 @click.pass_context
 def notify_today(ctx):
     """Show today's events."""
-    notify_todays_events()
+    notify_todays_events(ctx.obj)
 
 
 @cli.command()
@@ -353,14 +375,14 @@ def notify_today(ctx):
 @click.pass_context
 def notify_soon(ctx, minutes):
     """Process notifications for imminent events."""
-    notify_impending_events(int(minutes))
+    notify_impending_events(ctx.obj, int(minutes))
 
 
 @cli.command()
 @click.pass_context
 def push_events(ctx):
     """Push event data to remote storage."""
-    sync.push_event_data()
+    sync.push_event_data(ctx.obj)
     print("Events pushed")
 
 
@@ -368,7 +390,7 @@ def push_events(ctx):
 @click.pass_context
 def pull_events(ctx):
     """Pull event data from remote storage. Overwrites local data."""
-    sync.get_event_data()
+    sync.get_event_data(ctx.obj)
     print("Event data pulled")
 
 
@@ -376,10 +398,11 @@ def pull_events(ctx):
 @click.pass_context
 def info(ctx):
     """Show information about settings."""
-    click.echo(f"{constants.BASE_DATA_PATH=}")
-    click.echo(f"{constants.EVENTS_FILENAME=}")
-    click.echo(f"{constants.CURRENT_TZ=}")
-    click.echo(f"{constants.DEFAULT_TZ_NAME=}")
+    for k, v in ctx.obj.items():
+        print(f"{k.ljust(25)}: {str(v)[:50]}")
+    print(f"{k.ljust(25)}: {str(v)[:50]}")
+    print(f"{'CURRENT_TZ'.ljust(25)}: {str(constants.CURRENT_TZ)[:50]}")
+    print(f"{'DEFAULT_TZ_NAME'.ljust(25)}: {str(constants.DEFAULT_TZ_NAME)[:50]}")
 
 
 def existing_external_event(external_id, events) -> Optional[CalendarEntry]:
@@ -436,7 +459,7 @@ def pull_google_events(ctx):
                 source="googlecal",
                 data=data,
             )
-            upsert_event(new_event, events)
+            upsert_event(ctx.obj["event_data_path"], new_event, events)
         else:
             print("SKIPPING")
 
