@@ -24,6 +24,7 @@ def notify_todays_events(context):
     print(r)
     if not r.status_code == 200:
         print(r.content)
+    return r
 
 
 def get_impending_events(events, minutes=15):

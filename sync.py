@@ -25,7 +25,7 @@ def push_event_data(context):
 
 def get_event_data(context):
 
-    data = get_s3().info(remote_path())
+    data = get_s3(context).info(remote_path(context))
     remote_dt = data.get("LastModified")
     print(f"Remote file time : {arrow.get(remote_dt)}")
     print(

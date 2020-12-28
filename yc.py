@@ -1,9 +1,8 @@
 import os
-import sys
 import json
 import uuid
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional
 import pytz
 import datetime
 import getpass
@@ -48,6 +47,10 @@ class DatetimeInvalid(Exception):
     pass
 
 
+class EventNotFound(Exception):
+    pass
+
+
 def make_event(
     summary,
     dt_str,
@@ -66,7 +69,9 @@ def make_event(
     dt = parse_datetime(dt_str)
     if not dt:
         raise DatetimeInvalid(f"Could not turn into datetime: {dt_str}")
-    dt = dt.tzinfo or tz.localize(dt)
+    #  import ipdb; ipdb.set_trace()
+    if not dt.tzinfo:
+        dt = tz.localize(dt)
     dt = dt.replace(microsecond=0)
 
     duration = duration or datetime.timedelta(hours=1)
@@ -211,8 +216,6 @@ def edit_event_interactive(event: CalendarEntry) -> CalendarEntry:
     timezone_str = click.prompt("Timezone", default=event.timezone, type=str)
     # duration = click.prompt("Duration", default=event.duration, type=str)
 
-    # import ipdb;ipdb.set_trace()
-
     event.summary = summary
     timezone_str = timezone_name_from_string(timezone_str)
     tz = pytz.timezone(timezone_str)
@@ -224,38 +227,28 @@ def edit_event_interactive(event: CalendarEntry) -> CalendarEntry:
     return event
 
 
-def filter_events(events, name):
-    """Filter events with name."""
-    if name.lower().strip() == "today":
-        return tuple(e for e in events if e.dt.date() == arrow.get().date)
-
-
-def get_event(events, name: str) -> Optional[CalendarEntry]:
+def get_event(events, name: str) -> CalendarEntry:
     event = None
+
     if utils.is_uuid(name):
         events = tuple(e for e in events if e.uid == name)
-        if not events:
-            click.echo("Could not find event")
-            sys.exit(1)
-        event = events[0]
+        if events:
+            event = events[0]
     elif utils.is_short_uuid(name):
         events = tuple(e for e in events if utils.get_short_uid(e.uid) == name)
-        if not events:
-            click.echo("Could not find event")
-            sys.exit(1)
-        event = events[0]
+        if events:
+            event = events[0]
     else:
         if name:
-            events = filter_events(events, name)
-            if not events:
-                click.echo(f"No events for {name}")
-                sys.exit(1)
-        if len(events) > 1:
+            events = tuple(e for e in events if e.summary == name)
+        if events and len(events) > 1:
             print_events(events, numbered=True)
             v = click.prompt("Choose an event", type=int)
             event = events[v]
-        elif len(events) == 1:
+        elif events and len(events) == 1:
             event = events[0]
+    if not event:
+        raise EventNotFound()
     return event
 
 
@@ -269,6 +262,7 @@ def edit(ctx, name):
 
     event = get_event(events, name)
     event = edit_event_interactive(event)
+
     upsert_event(ctx.obj["events_data_path"], event, events)
     event.dump()
 
@@ -419,9 +413,10 @@ def pull_google_events(ctx):
     """Interactively pull data from user's google calendar.
     Requires credentials to be setup.
     """
+    #  import ipdb; ipdb.set_trace()
     rejected = list()
     events = ctx.obj.get("events")
-    gevents = google_api.get_google_events(10)
+    gevents = google_api.get_google_events(ctx.obj, 10)
     for e in gevents:
         external_id = e.get("id")
         summary = e.get("summary")
@@ -459,7 +454,7 @@ def pull_google_events(ctx):
                 source="googlecal",
                 data=data,
             )
-            upsert_event(ctx.obj["event_data_path"], new_event, events)
+            upsert_event(ctx.obj["events_data_path"], new_event, events)
         else:
             print("SKIPPING")
 

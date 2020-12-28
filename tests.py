@@ -1,17 +1,28 @@
 import os
 import json
 import unittest
+from unittest import mock
 import shutil
 import datetime
+import types
 
 from click.testing import CliRunner
 
 import constants
 from yc import cli
-from yc import make_event, timezone_name_from_string, upsert_event, print_events
-from yc import DatetimeInvalid
+from yc import (
+    make_event,
+    timezone_name_from_string,
+    upsert_event,
+    print_events,
+    get_event,
+)
+from yc import DatetimeInvalid, EventNotFound
 from files import write_events
 import utils
+import notify
+from services import twilio
+import sync
 
 TEST_USERNAME = "_cal_test_user_"
 
@@ -33,14 +44,14 @@ SETTINGS = {
 }
 
 
-class TestSum(unittest.TestCase):
+class TestYewCal(unittest.TestCase):
     def setUp(self):
         self.username = TEST_USERNAME
         base_data_path = os.path.join(
             os.path.expanduser("~"), ".yew.d", self.username, "cal"
         )
         events_data_path = os.path.join(base_data_path, constants.EVENTS_FILENAME)
-        self.events_data_path = events_data_path        
+        self.events_data_path = events_data_path
         settings_path = os.path.join(base_data_path, constants.SETTINGS_FILENAME)
 
         # we delete entire environment for each test
@@ -51,13 +62,17 @@ class TestSum(unittest.TestCase):
         with open(settings_path, "wt") as f:
             f.write(json.dumps(SETTINGS))
         events = list()
-        events.append(make_event("event1", "tomorrow",
-                                 timezone_string="london",
-                                 duration=datetime.timedelta(hours = 1),
-                                 external_id="my_external_id",
-                                 source="some_external_source",
-                                 data={"mydata": "could be anything"}
-                                 ))
+        events.append(
+            make_event(
+                "event1",
+                "tomorrow",
+                timezone_string="london",
+                duration=datetime.timedelta(hours=1),
+                external_id="my_external_id",
+                source="some_external_source",
+                data={"mydata": "could be anything"},
+            )
+        )
         events.append(make_event("event2", "next week"))
         events.append(make_event("event3", "in four days"))
         events.append(make_event("event4", "today"))
@@ -65,13 +80,16 @@ class TestSum(unittest.TestCase):
         self.events = events
         self.event_count = len(events)
         write_events(events_data_path, events)
-
+        self.context = {
+            "events_data_path": events_data_path,
+        }
+        self.context.update(SETTINGS)
 
     def test_timezone_name_from_string(self):
         assert timezone_name_from_string("Pacific/Kwajalein")
         assert timezone_name_from_string("pacific/kwajalein")
         assert timezone_name_from_string("kwajalein")
-        
+
     def test_invalid_timezone_name_from_string(self):
         with self.assertRaises(Exception):
             timezone_name_from_string("xxxxxxxxx")
@@ -85,7 +103,53 @@ class TestSum(unittest.TestCase):
     def test_print_events(self):
         print_events(self.events, human=True, numbered=True, use_local_time=False)
         print_events(self.events, human=False, numbered=True, use_local_time=True)
-        
+
+    def test_impending_events(self):
+        events = notify.get_impending_events(self.events, minutes=10000)
+        assert events
+
+    def test_events_as_string(self):
+        s = notify.events_as_string(self.events)
+        assert s
+
+    def test_notify_todays_events(self):
+        with mock.patch("requests.post") as requests_post:
+            requests_post.return_value = types.SimpleNamespace(
+                status_code=200, content="ok"
+            )
+            r = notify.notify_todays_events(self.context)
+            print(r)
+            assert r.content == "ok"
+
+    def test_notify_impending_events(self):
+        with mock.patch("requests.post") as requests_post:
+            requests_post.return_value = types.SimpleNamespace(
+                status_code=200, content="ok", json=lambda: {"status": "ok"}
+            )
+            notify.notify_impending_events(self.context, minutes=10000)
+
+    def test_twilio(self):
+        with mock.patch("services.twilio.Client"):
+            twilio.send_sms(self.context, "my message")
+
+    @mock.patch("sync.get_s3")
+    @mock.patch("sync.arrow.get")
+    def test_get_event_data(self, mock_arrow_get, mock_get_s3):
+        mock_arrow_get.return_value = datetime.datetime.now()
+        sync.get_event_data(self.context)
+
+    def test_get_event(self):
+        # use short form of uuid
+        assert get_event(self.events, self.events[0].uid.split("-")[0])
+        # long form
+        assert get_event(self.events, self.events[0].uid)
+        # by name
+        assert get_event(self.events, "event1")
+
+    def test_get_event_not_found(self):
+        with self.assertRaises(EventNotFound):
+            get_event(self.events, "never heard of it")
+
     def test_edit(self):
 
         runner = CliRunner()
@@ -96,11 +160,11 @@ class TestSum(unittest.TestCase):
                 "edit",
                 self.events[0].uid,
             ],
-            input="\n\n\n\n\n\n\n"
+            input="\n\n\n\n\n\n\n",
         )
 
         assert result.exit_code == 0
-        
+
     def test_info(self):
 
         runner = CliRunner()
@@ -177,7 +241,7 @@ class TestSum(unittest.TestCase):
             ],
         )
         assert result.exit_code == 0
-        
+
     def test_describe_short_uid(self):
         runner = CliRunner()
         result = runner.invoke(
@@ -220,10 +284,8 @@ class TestSum(unittest.TestCase):
         )
         assert result.exit_code == 0
 
-    # edit
     # notify-soon
     # notify-today
     # pull-events
     # pull-google-events
     # push-events
-
