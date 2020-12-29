@@ -27,14 +27,14 @@ def get_event_data(context):
 
     data = get_s3(context).info(remote_path(context))
     remote_dt = data.get("LastModified")
+    local_events_path = context.get("events_data_path")
     print(f"Remote file time : {arrow.get(remote_dt)}")
-    print(
-        f"Local file time  : {arrow.get(os.path.getmtime(context.get('events_data_path')))}"
-    )
-    if arrow.get(remote_dt) < arrow.get(
-        os.path.getmtime(context.get("events_data_path"))
-    ):
-        print("Remote is older than local, aborting")
-        raise SystemExit
-    else:
-        get_s3().get_file(remote_path(context), context.get("events_data_path"))
+    if os.path.exists(local_events_path):
+        print(f"Local file time  : {arrow.get(os.path.getmtime(local_events_path))}")
+        if not arrow.get(remote_dt) < arrow.get(
+            os.path.getmtime(context.get("events_data_path"))
+        ):
+            print("Remote is older than local, aborting")
+            return
+
+    get_s3(context).get_file(remote_path(context), context.get("events_data_path"))

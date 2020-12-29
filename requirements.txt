@@ -9,3 +9,5 @@ environs
 google-api-python-client
 google-auth-oauthlib
 twilio
+hypothesis[zoneinfo]
+

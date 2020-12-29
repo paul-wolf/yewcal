@@ -7,6 +7,10 @@ import datetime
 import types
 
 from click.testing import CliRunner
+from hypothesis import given
+import hypothesis.strategies as st
+from hypothesis import settings, Verbosity
+
 
 import constants
 from yc import cli
@@ -18,6 +22,7 @@ from yc import (
     get_event,
 )
 from yc import DatetimeInvalid, EventNotFound
+from models import CalendarEntry
 from files import write_events
 import utils
 import notify
@@ -76,7 +81,7 @@ class TestYewCal(unittest.TestCase):
         events.append(make_event("event2", "next week"))
         events.append(make_event("event3", "in four days"))
         events.append(make_event("event4", "today"))
-        str(events[0])
+
         self.events = events
         self.event_count = len(events)
         write_events(events_data_path, events)
@@ -84,6 +89,33 @@ class TestYewCal(unittest.TestCase):
             "events_data_path": events_data_path,
         }
         self.context.update(SETTINGS)
+
+    @given(
+        st.text(min_size=2, max_size=1000),
+        st.datetimes(),
+        st.timezones(),
+        st.timedeltas(),
+    )
+    @settings(verbosity=Verbosity.verbose)
+    def test_make_event(self, summary, dts, tz, delta):
+        ce = make_event(
+            summary=summary,
+            dt_str=dts.isoformat(),
+            timezone_string=str(tz),
+            duration=delta,
+        )
+        assert isinstance(ce, CalendarEntry)
+        assert ce.summary == summary
+
+    # external_id=None,
+    # source=None,
+    # data=None,
+
+    def test_str_event(self):
+        assert str(self.events[0])
+
+    def test_repr_event(self):
+        assert repr(self.events[0])
 
     def test_timezone_name_from_string(self):
         assert timezone_name_from_string("Pacific/Kwajalein")
