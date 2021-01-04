@@ -98,9 +98,10 @@ def upsert_event(
 ) -> None:
     """Update or add event.
 
-    This writes the event file.
+    This mutates the context event list and writes the event file.
 
     """
+    # check if event exists
     events = tuple(e for e in event_data if e.uid == event.uid)
     if events:
         # update existing
@@ -111,13 +112,19 @@ def upsert_event(
         e.duration = event.duration
         e.repeats = event.repeats
     else:
-        # create new
+        # insert new
         event_data.append(event)
 
-    write_events(events_data_path, events)
+    write_events(events_data_path, event_data)
 
 
 def print_events(events, human=None, numbered=None, use_local_time=True):
+    """Print events to stdout.
+    human: humanize time
+    numbered: if you want to show a menu, we number the events
+    use_local_time: print the time for our current timezone
+    """
+    # import pdb; pdb.set_trace() 
     current_date = None
     print(f"Current time: {arrow.get()}, {constants.CURRENT_TZ}")
     for i, e in enumerate(events):

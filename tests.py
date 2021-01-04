@@ -23,7 +23,7 @@ from yc import (
 )
 from yc import DatetimeInvalid, EventNotFound
 from models import CalendarEntry
-from files import write_events
+from files import write_events, read_events
 import utils
 import notify
 from services import twilio
@@ -96,7 +96,7 @@ class TestYewCal(unittest.TestCase):
         st.timezones(),
         st.timedeltas(),
     )
-    @settings(verbosity=Verbosity.verbose)
+    # @settings(verbosity=Verbosity.verbose)
     def test_make_event(self, summary, dts, tz, delta):
         ce = make_event(
             summary=summary,
@@ -130,8 +130,17 @@ class TestYewCal(unittest.TestCase):
         utils.dt_nowish(minutes=10)
 
     def test_upsert_event(self):
+        # write to events file with existing event
         upsert_event(self.events_data_path, self.events[0], self.events)
-
+        events = read_events(self.events_data_path)
+        assert len(events) == len(self.events)
+        old_length = len(self.events)
+        
+        ce = make_event("upserted event", "next week")
+        upsert_event(self.events_data_path, ce, self.events)
+        events = read_events(self.events_data_path)
+        assert len(events) == old_length + 1
+        
     def test_print_events(self):
         print_events(self.events, human=True, numbered=True, use_local_time=False)
         print_events(self.events, human=False, numbered=True, use_local_time=True)

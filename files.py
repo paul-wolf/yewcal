@@ -18,6 +18,11 @@ def read_events(events_data_path) -> List[CalendarEntry]:
 
 
 def write_events(events_data_path, event_data: Sequence[CalendarEntry]) -> None:
+    # we only accept writing when we have at least one event to write
+    assert event_data
+    # only write to existing path
+    assert events_data_path
+
     base_data_path = os.path.split(events_data_path)[0]
     if not os.path.exists(base_data_path):
         os.makedirs(base_data_path)
