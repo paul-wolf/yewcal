@@ -124,7 +124,7 @@ def print_events(events, human=None, numbered=None, use_local_time=True):
     numbered: if you want to show a menu, we number the events
     use_local_time: print the time for our current timezone
     """
-    # import pdb; pdb.set_trace() 
+    # import pdb; pdb.set_trace()
     current_date = None
     print(f"Current time: {arrow.get()}, {constants.CURRENT_TZ}")
     for i, e in enumerate(events):

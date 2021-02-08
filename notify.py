@@ -1,7 +1,12 @@
-from utils import dt_today, dt_tomorrow, dt_nowish
+import os
 
+from utils import dt_today, dt_tomorrow, dt_nowish
 from files import read_events
 from services import slack, mailgun
+
+
+def notify_macos(title, text):
+    os.system(f"osascript -e 'display notification '{text}' with title '{title}'")
 
 
 def events_as_string(events):
@@ -21,7 +26,7 @@ def notify_todays_events(context):
         subject="Today's events",
         body=body,
     )
-    print(r)
+
     if not r.status_code == 200:
         print(r.content)
     return r
@@ -40,3 +45,4 @@ def notify_impending_events(context, minutes=15):
     events = get_impending_events(events, minutes)
     for e in events:
         slack.post_message_to_slack(context, "#random", f"{e.summary} at {e.dt}")
+        notify_macos(e.summary, f"{e.summary} at {e.dt}")
