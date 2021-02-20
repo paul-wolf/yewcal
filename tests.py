@@ -135,12 +135,12 @@ class TestYewCal(unittest.TestCase):
         events = read_events(self.events_data_path)
         assert len(events) == len(self.events)
         old_length = len(self.events)
-        
+
         ce = make_event("upserted event", "next week")
         upsert_event(self.events_data_path, ce, self.events)
         events = read_events(self.events_data_path)
         assert len(events) == old_length + 1
-        
+
     def test_print_events(self):
         print_events(self.events, human=True, numbered=True, use_local_time=False)
         print_events(self.events, human=False, numbered=True, use_local_time=True)
